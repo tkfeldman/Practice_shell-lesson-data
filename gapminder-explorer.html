@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gapminder Data Explorer</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171e2e;
+    --panel-2: #1d2639;
+    --border: #2a3550;
+    --text: #e6ecf7;
+    --muted: #8b98b8;
+    --accent: #4cc9f0;
+    --accent-2: #f72585;
+    --radius: 10px;
+    font-size: 15px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    padding: 24px;
+    min-height: 100vh;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .panel { overflow: hidden; }
+  .chart-container { width: 100%; overflow: hidden; }
+  canvas { display: block; max-width: 100%; height: auto; }
+  h1 { font-size: 1.4rem; margin-bottom: 4px; }
+  .subtitle { color: var(--muted); margin-bottom: 20px; font-size: 0.9rem; }
+  .controls {
+    display: flex; flex-wrap: wrap; gap: 14px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 20px;
+    align-items: flex-end;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 4px; }
+  .control-group label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  select, input[type="number"], input[type="range"] {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    outline: none;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+  input[type="range"] { padding: 0; width: 220px; accent-color: var(--accent); }
+  button {
+    background: var(--accent);
+    color: #08111f;
+    border: none;
+    border-radius: 6px;
+    padding: 7px 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  button:hover { opacity: 0.85; }
+  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  .year-badge {
+    font-size: 1.6rem; font-weight: 700; color: var(--accent);
+    min-width: 70px; text-align: center; font-variant-numeric: tabular-nums;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .panel h2 { font-size: 0.95rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
+  .chart-container { position: relative; width: 100%; }
+  .table-wrap { max-height: 420px; overflow: auto; border-radius: 6px; border: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  th {
+    position: sticky; top: 0;
+    background: var(--panel-2);
+    color: var(--muted);
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  th:hover { color: var(--text); }
+  th.sorted-asc::after { content: " ↑"; color: var(--accent); }
+  th.sorted-desc::after { content: " ↓"; color: var(--accent); }
+  td { padding: 6px 10px; border-bottom: 1px solid #202a40; white-space: nowrap; }
+  tr:hover td { background: #1f2a44; }
+  .stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  @media (max-width: 700px) { .stat-cards { grid-template-columns: repeat(2, 1fr); } }
+  .stat-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+  .stat-card .label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-card .value { font-size: 1.3rem; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .loading { text-align: center; color: var(--muted); padding: 40px; }
+  .error { color: #ff7b7b; text-align: center; padding: 40px; }
+  .continent-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 0.78rem; color: var(--muted); }
+  .continent-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+</style>
+</head>
+<body>
+
+<h1>🌍 Gapminder Data Explorer</h1>
+<p class="subtitle">Explore population, life expectancy &amp; GDP per capita across countries and years (1952–2007)</p>
+
+<div class="loading" id="status">Loading gapminder_data.csv…</div>
+
+<div id="app" style="display:none">
+  <div class="stat-cards" id="statCards"></div>
+
+  <div class="controls">
+    <div class="control-group">
+      <label>Continent</label>
+      <select id="continentFilter"><option value="all">All continents</option></select>
+    </div>
+    <div class="control-group">
+      <label>Country</label>
+      <select id="countryFilter" style="min-width:160px"><option value="all">All countries</option></select>
+    </div>
+    <div class="control-group">
+      <label>Bubble size = metric</label>
+      <select id="sizeMetric">
+        <option value="pop">Population</option>
+        <option value="gdpPercap">GDP per cap.</option>
+        <option value="lifeExp">Life expectancy</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label>X axis</label>
+      <select id="xMetric">
+        <option value="gdpPercap">GDP per capita</option>
+        <option value="lifeExp">Life expectancy</option>
+        <option value="pop">Population</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label>Y axis</label>
+      <select id="yMetric">
+        <option value="lifeExp">Life expectancy</option>
+        <option value="pop">Population</option>
+        <option value="gdpPercap">GDP per capita</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label>&nbsp;</label>
+      <label class="log-toggle" style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.8rem;color:var(--muted)">
+        <input type="checkbox" id="logScale" checked> log scale
+      </label>
+    </div>
+    <div class="control-group">
+      <label>Year</label>
+      <input type="range" id="yearSlider" min="1952" max="2007" step="5" value="2007">
+    </div>
+    <div class="control-group">
+      <label>&nbsp;</label>
+      <div class="year-badge" id="yearBadge">2007</div>
+    </div>
+    <div class="control-group">
+      <label>&nbsp;</label>
+      <button id="playBtn">▶ Play</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2 id="scatterTitle">GDP per capita vs Life expectancy</h2>
+      <div class="chart-container"><canvas id="scatter" width="900" height="520"></canvas></div>
+      <div class="continent-legend" id="legend"></div>
+    </div>
+    <div class="panel">
+      <h2 id="barTitle">Life expectancy by country (top 15)</h2>
+      <div class="chart-container"><canvas id="bars" width="900" height="520"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:20px">
+    <div class="panel">
+      <h2>Selected country history</h2>
+      <div class="chart-container"><canvas id="line" width="900" height="360"></canvas></div>
+      <p style="color:var(--muted);font-size:0.78rem;margin-top:8px" id="lineHint">Click a bubble in the scatter plot (or choose a country above) to see its trend over time.</p>
+    </div>
+    <div class="panel">
+      <h2>Data table <span id="rowCount" style="color:var(--accent)"></span></h2>
+      <div class="table-wrap">
+        <table id="dataTable">
+          <thead><tr>
+            <th data-col="country">Country</th>
+            <th data-col="year">Year</th>
+            <th data-col="continent">Continent</th>
+            <th data-col="lifeExp">Life Exp</th>
+            <th data-col="pop">Population</th>
+            <th data-col="gdpPercap">GDP per Cap</th>
+          </tr></thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const COLORS = { Africa: '#f72585', Americas: '#4cc9f0', Asia: '#f9c74f', Europe: '#90be6d', 'Oceania': '#b5179e' };
+  const METRIC_LABELS = { gdpPercap: 'GDP per capita', lifeExp: 'Life expectancy', pop: 'Population' };
+  const METRIC_FMT = {
+    gdpPercap: v => '$' + Math.round(v).toLocaleString(),
+    lifeExp: v => v.toFixed(1) + ' yrs',
+    pop: v => { if (v >= 1e9) return (v/1e9).toFixed(2) + 'B'; if (v >= 1e6) return (v/1e6).toFixed(1) + 'M'; if (v >= 1e3) return (v/1e3).toFixed(0) + 'K'; return Math.round(v).toString(); }
+  };
+
+  let data = [];
+  let selectedCountry = null;
+  let sortCol = 'gdpPercap', sortDir = -1;
+
+  const $ = id => document.getElementById(id);
+
+  // ---------- CSV loading ----------
+  function fetchText(path) {
+    return fetch(path).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+  }
+  async function loadCSV() {
+    let text;
+    try { text = await fetchText('gapminder_data.csv'); }
+    catch (e) {
+      // Fall back to a file picker if served over file:// or fetch blocked
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = '.csv';
+      input.onchange = async () => {
+        const f = input.files[0];
+        text = await f.text();
+        start();
+      };
+      input.click();
+      return;
+    }
+    start();
+  }
+
+  function parseCSV(text) {
+    const lines = text.trim().split(/\r?\n/);
+    const header = lines[0].split(',');
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split(',');
+      if (parts.length < header.length) continue;
+      const row = {};
+      header.forEach((h, j) => {
+        row[h] = isNaN(parts[j]) || parts[j] === '' ? parts[j] : Number(parts[j]);
+      });
+      rows.push(row);
+    }
+    return rows;
+  }
+
+  function start() {
+    data = parseCSV(document.getElementById('status') ? rawCSV : '');
+    initControls();
+    $('status').style.display = 'none';
+    $('app').style.display = 'block';
+    render();
+  }
+  let rawCSV = '';
+
+  // ---------- Controls ----------
+  function initControls() {
+    const conts = [...new Set(data.map(d => d.continent))].sort();
+    conts.forEach(c => $('continentFilter').add(new Option(c, c)));
+    const countries = [...new Set(data.map(d => d.country))].sort();
+    countries.forEach(c => $('countryFilter').add(new Option(c, c)));
+    const years = [...new Set(data.map(d => d.year))].sort((a,b) => a-b);
+    $('yearSlider').min = years[0]; $('yearSlider').max = years[years.length-1];
+    $('yearSlider').value = years[years.length-1];
+  }
+
+  function currentYear() { return Number($('yearSlider').value); }
+  function filtered() {
+    const c = $('continentFilter').value;
+    const y = currentYear();
+    return data.filter(d => d.year === y && (c === 'all' || d.continent === c));
+  }
+  function scaled(v, log) { return log && v > 0 ? Math.log10(v) : v; }
+  function unscaled(v, log) { return log ? Math.pow(10, v) : v; }
+
+  let playTimer = null;
+  function setPlaying(on) {
+    clearInterval(playTimer);
+    if (on) {
+      playTimer = setInterval(() => {
+        const s = $('yearSlider');
+        let v = Number(s.value) + Number(s.step);
+        if (v > Number(s.max)) v = Number(s.min);
+        s.value = v;
+        render();
+      }, 600);
+    }
+    $('playBtn').textContent = on ? '⏸ Pause' : '▶ Play';
+  }
+
+  // ---------- Stat cards ----------
+  function renderStats(rows) {
+    const n = rows.length;
+    const avgLife = rows.reduce((s,d) => s + d.lifeExp, 0) / n;
+    const totalPop = rows.reduce((s,d) => s + d.pop, 0);
+    const avgGdp = rows.reduce((s,d) => s + d.gdpPercap, 0) / n;
+    const maxGdp = Math.max(...rows.map(d => d.gdpPercap));
+    $('statCards').innerHTML = `
+      <div class="stat-card"><div class="label">Countries</div><div class="value">${n}</div></div>
+      <div class="stat-card"><div class="label">Total population</div><div class="value">${METRIC_FMT.pop(totalPop)}</div></div>
+      <div class="stat-card"><div class="label">Avg life expectancy</div><div class="value">${avgLife.toFixed(1)} yrs</div></div>
+      <div class="stat-card"><div class="label">Avg GDP per cap.</div><div class="value">$${Math.round(avgGdp).toLocaleString()}</div></div>
+    `;
+  }
+
+  // ---------- Scatter ----------
+  function niceCanvas(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.parentElement.clientWidth || 900;
+    const h = Number(canvas.getAttribute('height'));
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w, h };
+  }
+
+  function drawScatter(rows) {
+    const canvas = $('scatter');
+    const { ctx, w, h } = niceCanvas(canvas);
+    const log = $('logScale').checked;
+    const xKey = $('xMetric').value, yKey = $('yMetric').value, sizeKey = $('sizeMetric').value;
+    const M = { l: 70, r: 20, t: 20, b: 46 };
+    const pw = w - M.l - M.r, ph = h - M.t - M.b;
+
+    const xs = rows.map(d => scaled(d[xKey], log));
+    const ys = rows.map(d => scaled(d[yKey], log));
+    const xmin = Math.min(...xs), xmax = Math.max(...xs);
+    const ymin = Math.min(...ys), ymax = Math.max(...ys);
+    const xpad = (xmax - xmin) * 0.08 || 1, ypad = (ymax - ymin) * 0.08 || 1;
+    const X = v => M.l + (v - (xmin - xpad)) / ((xmax + xpad) - (xmin - xpad)) * pw;
+    const Y = v => M.t + ph - (v - (ymin - ypad)) / ((ymax + ypad) - (ymin - ypad)) * ph;
+
+    const sizes = rows.map(d => d[sizeKey]);
+    const rmin = Math.sqrt(Math.min(...sizes)), rmax = Math.sqrt(Math.max(...sizes));
+    const R = v => 4 + (Math.sqrt(v) - rmin) / (rmax - rmin || 1) * 26;
+
+    // grid + axes
+    ctx.strokeStyle = '#22304e'; ctx.lineWidth = 1;
+    ctx.fillStyle = '#8b98b8'; ctx.font = '12px Segoe UI, sans-serif';
+    const ticks = 5;
+    for (let i = 0; i <= ticks; i++) {
+      const xv = (xmin - xpad) + (xmax - xmin + xpad) * i / ticks;
+      const yv = (ymin - ypad) + (ymax - ymin + ypad) * i / ticks;
+      ctx.beginPath(); ctx.moveTo(X(xv), M.t); ctx.lineTo(X(xv), M.t + ph); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(M.l, Y(yv)); ctx.lineTo(M.l + pw, Y(yv)); ctx.stroke();
+      const xl = unscaled(xv, log), yl = unscaled(yv, log);
+      ctx.textAlign = 'center'; ctx.fillText(METRIC_FMT[xKey](xl).replace(/\.?0+$/, ''), X(xv), h - M.b + 18);
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(METRIC_FMT[yKey](yl).replace(/\.?0+$/, ''), M.l - 8, Y(yv));
+      ctx.textBaseline = 'alphabetic';
+    }
+    // axis titles
+    ctx.textAlign = 'center'; ctx.fillStyle = '#8b98b8';
+    ctx.fillText(METRIC_LABELS[xKey] + (log ? ' (log)' : ''), M.l + pw/2, h - 8);
+    ctx.save(); ctx.translate(16, M.t + ph/2); ctx.rotate(-Math.PI/2);
+    ctx.fillText(METRIC_LABELS[yKey] + (log ? ' (log)' : ''), 0, 0); ctx.restore();
+
+    // bubbles
+    canvas._points = [];
+    rows.forEach(d => {
+      const x = X(scaled(d[xKey], log)), y = Y(scaled(d[yKey], log));
+      const color = COLORS[d.continent] || '#888';
+      const sel = d.country === selectedCountry;
+      ctx.beginPath();
+      ctx.arc(x, y, R(d[sizeKey]), 0, Math.PI * 2);
+      ctx.globalAlpha = sel ? 1 : 0.65;
+      ctx.fillStyle = color; ctx.fill();
+      ctx.globalAlpha = 1;
+      if (sel) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); }
+      canvas._points.push({ x, y, r: R(d[sizeKey]), row: d });
+      if (sel || (rows.length <= 60)) {
+        ctx.fillStyle = 'rgba(230,236,247,0.85)';
+        ctx.font = '10px Segoe UI, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(d.country, x, y - R(d[sizeKey]) - 4);
+      }
+    });
+
+    $('scatterTitle').textContent = `${METRIC_LABELS[xKey]} vs ${METRIC_LABELS[yKey]} — ${currentYear()}`;
+  }
+
+  // scatter click
+  $('scatter').addEventListener('click', e => {
+    const pts = $('scatter')._points || [];
+    const rect = $('scatter').getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    let hit = null;
+    for (const p of pts) {
+      const dx = mx - p.x, dy = my - p.y;
+      if (dx*dx + dy*dy <= (p.r + 3) * (p.r + 3)) { hit = p; break; }
+    }
+    if (hit) { selectedCountry = hit.row.country; $('countryFilter').value = selectedCountry; render(); }
+  });
+
+  // ---------- Bar chart ----------
+  function drawBars(rows) {
+    const canvas = $('bars');
+    const { ctx, w, h } = niceCanvas(canvas);
+    const key = $('yMetric').value;
+    let top = [...rows].sort((a,b) => b[key] - a[key]).slice(0, 15);
+    const M = { l: 120, r: 20, t: 10, b: 30 };
+    const pw = w - M.l - M.r, ph = h - M.t - M.b;
+    const maxv = Math.max(...top.map(d => d[key])) || 1;
+    const bh = ph / top.length;
+
+    ctx.font = '12px Segoe UI, sans-serif';
+    top.forEach((d, i) => {
+      const y = M.t + i * bh;
+      const bw = (d[key] / maxv) * pw;
+      ctx.fillStyle = COLORS[d.continent] || '#888';
+      ctx.globalAlpha = 0.85;
+      ctx.fillRect(M.l, y + 2, bw, bh - 5);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#e6ecf7'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(d.country, M.l - 8, y + bh/2);
+      ctx.textAlign = 'left';
+      ctx.fillText(METRIC_FMT[key](d[key]), M.l + bw + 6, y + bh/2);
+    });
+    $('barTitle').textContent = `${METRIC_LABELS[key]} by country (top 15, ${currentYear()})`;
+  }
+
+  // ---------- Line chart ----------
+  function drawLine(rows) {
+    const canvas = $('line');
+    const { ctx, w, h } = niceCanvas(canvas);
+    const M = { l: 60, r: 20, t: 16, b: 34 };
+    const pw = w - M.l - M.r, ph = h - M.t - M.b;
+
+    let series;
+    if (selectedCountry) {
+      series = data.filter(d => d.country === selectedCountry).sort((a,b) => a.year - b.year);
+    } else {
+      // show continent averages
+      const conts = [...new Set(rows.map(d => d.continent))].sort();
+      series = conts.map(c => ({
+        name: c,
+        color: COLORS[c],
+        points: [...new Set(data.map(d => d.year))].sort((a,b) => a-b).map(yr => {
+          const sub = data.filter(d => d.continent === c && d.year === yr);
+          return { year: yr, value: sub.reduce((s,d) => s + d.lifeExp, 0) / sub.length };
+        })
+      }));
+    }
+
+    ctx.strokeStyle = '#22304e'; ctx.fillStyle = '#8b98b8'; ctx.font = '11px Segoe UI, sans-serif';
+    const allPts = (selectedCountry ? [{points: series.map(d => ({year:d.year, value:d.lifeExp}))}] : series)
+      .flatMap(s => s.points);
+    const xs = allPts.map(p => p.year), ys = allPts.map(p => p.value);
+    const xmin = Math.min(...xs), xmax = Math.max(...xs);
+    let ymin = Math.min(...ys), ymax = Math.max(...ys);
+    const pad = (ymax - ymin) * 0.1 || 5; ymin -= pad; ymax += pad;
+    const X = v => M.l + (v - xmin) / (xmax - xmin) * pw;
+    const Y = v => M.t + ph - (v - ymin) / (ymax - ymin) * ph;
+
+    for (let i = 0; i <= 4; i++) {
+      const yv = ymin + (ymax - ymin) * i / 4;
+      ctx.beginPath(); ctx.moveTo(M.l, Y(yv)); ctx.lineTo(M.l + pw, Y(yv)); ctx.stroke();
+      ctx.textAlign = 'right'; ctx.fillText(yv.toFixed(0), M.l - 6, Y(yv) + 4);
+    }
+    for (let i = 0; i <= 4; i++) {
+      const xv = xmin + (xmax - xmin) * i / 4;
+      ctx.textAlign = 'center'; ctx.fillText(Math.round(xv), X(xv), h - M.b + 16);
+    }
+
+    const seriesArr = selectedCountry
+      ? [{ name: selectedCountry, color: '#4cc9f0', points: series.map(d => ({ year: d.year, value: d.lifeExp })) }]
+      : series;
+
+    seriesArr.forEach(s => {
+      ctx.strokeStyle = s.color; ctx.lineWidth = 2;
+      ctx.beginPath();
+      s.points.forEach((p, i) => { i === 0 ? ctx.moveTo(X(p.year), Y(p.value)) : ctx.lineTo(X(p.year), Y(p.value)); });
+      ctx.stroke();
+      // legend
+      ctx.fillStyle = s.color;
+      ctx.fillText('● ' + s.name, M.l + 6, 14);
+    });
+
+    ctx.textAlign = 'center';
+    ctx.fillText('Life expectancy over time (1952–2007)', M.l + pw/2, h - 4);
+    if (selectedCountry) $('lineHint').textContent = `Showing ${selectedCountry}. Life expectancy per year.`;
+    else $('lineHint').textContent = 'Average life expectancy by continent. Click a bubble to focus one country.';
+  }
+
+  // ---------- Table ----------
+  function renderTable(rows) {
+    const c = $('continentFilter').value;
+    const all = data.filter(d => c === 'all' || d.continent === c).sort((a,b) => {
+      const va = a[sortCol], vb = b[sortCol];
+      return (va < vb ? -1 : va > vb ? 1 : 0) * sortDir;
+    });
+    const show = all.slice(0, 200);
+    $('rowCount').textContent = `(${all.length} rows, showing ${show.length})`;
+    const fmt = { gdpPercap: v => Math.round(v).toLocaleString(), pop: v => Math.round(v).toLocaleString(), lifeExp: v => v.toFixed(1), year: v => v, country: v => v, continent: v => v };
+    $('tableBody').innerHTML = show.map(d =>
+      `<tr><td>${d.country}</td><td>${d.year}</td><td>${d.continent}</td><td>${fmt.lifeExp(d.lifeExp)}</td><td>${fmt.pop(d.pop)}</td><td>${fmt.gdpPercap(d.gdpPercap)}</td></tr>`
+    ).join('');
+    document.querySelectorAll('#dataTable th').forEach(th => {
+      th.classList.remove('sorted-asc', 'sorted-desc');
+      if (th.dataset.col === sortCol) th.classList.add(sortDir === 1 ? 'sorted-asc' : 'sorted-desc');
+    });
+  }
+
+  // ---------- Render all ----------
+  function render() {
+    const rows = filtered();
+    if (!rows.length) return;
+    $('yearBadge').textContent = currentYear();
+    renderStats(rows);
+    drawScatter(rows);
+    drawBars(rows);
+    drawLine(rows);
+    renderTable(rows);
+  }
+
+  // ---------- Events ----------
+  ['continentFilter','yearSlider','logScale','xMetric','yMetric','sizeMetric'].forEach(id =>
+    $(id).addEventListener('input', render));
+  $('countryFilter').addEventListener('input', e => { selectedCountry = e.target.value === 'all' ? null : e.target.value; render(); });
+  $('playBtn').addEventListener('click', () => setPlaying(playTimer === null));
+  document.querySelectorAll('#dataTable th').forEach(th => th.addEventListener('click', () => {
+    const col = th.dataset.col;
+    if (sortCol === col) sortDir *= -1; else { sortCol = col; sortDir = -1; }
+    renderTable(filtered());
+  }));
+  window.addEventListener('resize', () => { if (data.length) render(); });
+
+  // ---------- Boot ----------
+  (async () => {
+    rawCSV = await (async () => {
+      try { return await fetchText('gapminder_data.csv'); }
+      catch (e) {
+        // file:// or fetch blocked — open file picker
+        $('status').textContent = 'Click to choose gapminder_data.csv';
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = '.csv';
+        input.style.display = 'none'; document.body.appendChild(input);
+        $('status').onclick = () => input.click();
+        input.onchange = async () => {
+          const f = input.files[0];
+          const text = await f.text();
+          $('status').onclick = null; input.remove();
+          startWithText(text);
+        };
+        return null;
+      }
+    })();
+    if (rawCSV !== null) { rawCSV = rawCSV; start(); }
+  })();
+
+  function startWithText(text) {
+    rawCSV = text;
+    start();
+  }
+})();
+</script>
+</body>
+</html>
