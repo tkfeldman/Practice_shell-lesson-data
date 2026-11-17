@@ -6,14 +6,15 @@
 <title>Gapminder Data Explorer</title>
 <style>
   :root {
-    --bg: #0f1420;
-    --panel: #171e2e;
-    --panel-2: #1d2639;
-    --border: #2a3550;
-    --text: #e6ecf7;
-    --muted: #8b98b8;
-    --accent: #4cc9f0;
-    --accent-2: #f72585;
+    --bg: #fbf5ee;
+    --panel: #ffffff;
+    --panel-2: #f3ece2;
+    --border: #e6d9c8;
+    --text: #4a3f36;
+    --muted: #9a8b7a;
+    --accent: #e8a4b8;
+    --accent-dark: #c97f97;
+    --accent-2: #a3d9c4;
     --radius: 10px;
     font-size: 15px;
   }
@@ -45,7 +46,7 @@
   .control-group { display: flex; flex-direction: column; gap: 4px; }
   .control-group label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
   select, input[type="number"], input[type="range"] {
-    background: var(--panel-2);
+    background: #fff;
     border: 1px solid var(--border);
     color: var(--text);
     border-radius: 6px;
@@ -53,23 +54,23 @@
     font-size: 0.9rem;
     outline: none;
   }
-  select:focus, input:focus { border-color: var(--accent); }
+  select:focus, input:focus { border-color: var(--accent-dark); }
   input[type="range"] { padding: 0; width: 220px; accent-color: var(--accent); }
   button {
     background: var(--accent);
-    color: #08111f;
+    color: #4a3040;
     border: none;
     border-radius: 6px;
     padding: 7px 16px;
     font-size: 0.9rem;
     font-weight: 600;
     cursor: pointer;
-    transition: opacity 0.15s;
+    transition: opacity 0.15s, background 0.15s;
   }
-  button:hover { opacity: 0.85; }
+  button:hover { background: var(--accent-dark); color: #fff; }
   button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
   .year-badge {
-    font-size: 1.6rem; font-weight: 700; color: var(--accent);
+    font-size: 1.6rem; font-weight: 700; color: var(--accent-dark);
     min-width: 70px; text-align: center; font-variant-numeric: tabular-nums;
   }
   .grid {
@@ -83,6 +84,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 16px;
+    box-shadow: 0 1px 4px rgba(120,90,60,0.07);
   }
   .panel h2 { font-size: 0.95rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; }
   .chart-container { position: relative; width: 100%; }
@@ -98,12 +100,13 @@
     cursor: pointer;
     user-select: none;
     white-space: nowrap;
+    z-index: 1;
   }
-  th:hover { color: var(--text); }
+  th:hover { color: var(--accent-dark); }
   th.sorted-asc::after { content: " ↑"; color: var(--accent); }
   th.sorted-desc::after { content: " ↓"; color: var(--accent); }
-  td { padding: 6px 10px; border-bottom: 1px solid #202a40; white-space: nowrap; }
-  tr:hover td { background: #1f2a44; }
+  td { padding: 6px 10px; border-bottom: 1px solid #f0e7da; white-space: nowrap; }
+  tr:hover td { background: #fdf3e7; }
   .stat-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
   @media (max-width: 700px) { .stat-cards { grid-template-columns: repeat(2, 1fr); } }
   .stat-card {
@@ -111,11 +114,12 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 12px 14px;
+    box-shadow: 0 1px 3px rgba(120,90,60,0.06);
   }
   .stat-card .label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-  .stat-card .value { font-size: 1.3rem; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .stat-card .value { font-size: 1.3rem; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; color: var(--accent-dark); }
   .loading { text-align: center; color: var(--muted); padding: 40px; }
-  .error { color: #ff7b7b; text-align: center; padding: 40px; }
+  .error { color: #d98080; text-align: center; padding: 40px; }
   .continent-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 0.78rem; color: var(--muted); }
   .continent-legend span { display: inline-flex; align-items: center; gap: 5px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -223,7 +227,7 @@
 
 <script>
 (() => {
-  const COLORS = { Africa: '#f72585', Americas: '#4cc9f0', Asia: '#f9c74f', Europe: '#90be6d', 'Oceania': '#b5179e' };
+  const COLORS = { Africa: '#f4a3b5', Americas: '#8fd6d0', Asia: '#f7d48a', Europe: '#b5d89a', 'Oceania': '#cba8e0' };
   const METRIC_LABELS = { gdpPercap: 'GDP per capita', lifeExp: 'Life expectancy', pop: 'Population' };
   const METRIC_FMT = {
     gdpPercap: v => '$' + Math.round(v).toLocaleString(),
@@ -367,8 +371,8 @@
     const R = v => 4 + (Math.sqrt(v) - rmin) / (rmax - rmin || 1) * 26;
 
     // grid + axes
-    ctx.strokeStyle = '#22304e'; ctx.lineWidth = 1;
-    ctx.fillStyle = '#8b98b8'; ctx.font = '12px Segoe UI, sans-serif';
+    ctx.strokeStyle = '#e3d5c3'; ctx.lineWidth = 1;
+    ctx.fillStyle = '#9a8b7a'; ctx.font = '12px Segoe UI, sans-serif';
     const ticks = 5;
     for (let i = 0; i <= ticks; i++) {
       const xv = (xmin - xpad) + (xmax - xmin + xpad) * i / ticks;
@@ -382,7 +386,7 @@
       ctx.textBaseline = 'alphabetic';
     }
     // axis titles
-    ctx.textAlign = 'center'; ctx.fillStyle = '#8b98b8';
+    ctx.textAlign = 'center'; ctx.fillStyle = '#9a8b7a';
     ctx.fillText(METRIC_LABELS[xKey] + (log ? ' (log)' : ''), M.l + pw/2, h - 8);
     ctx.save(); ctx.translate(16, M.t + ph/2); ctx.rotate(-Math.PI/2);
     ctx.fillText(METRIC_LABELS[yKey] + (log ? ' (log)' : ''), 0, 0); ctx.restore();
@@ -391,17 +395,18 @@
     canvas._points = [];
     rows.forEach(d => {
       const x = X(scaled(d[xKey], log)), y = Y(scaled(d[yKey], log));
-      const color = COLORS[d.continent] || '#888';
+      const color = COLORS[d.continent] || '#ccc';
       const sel = d.country === selectedCountry;
       ctx.beginPath();
       ctx.arc(x, y, R(d[sizeKey]), 0, Math.PI * 2);
-      ctx.globalAlpha = sel ? 1 : 0.65;
+      ctx.globalAlpha = sel ? 1 : 0.75;
       ctx.fillStyle = color; ctx.fill();
       ctx.globalAlpha = 1;
-      if (sel) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); }
+      ctx.strokeStyle = 'rgba(90,70,55,0.25)'; ctx.lineWidth = 1; ctx.stroke();
+      if (sel) { ctx.strokeStyle = '#4a3f36'; ctx.lineWidth = 2; ctx.stroke(); }
       canvas._points.push({ x, y, r: R(d[sizeKey]), row: d });
       if (sel || (rows.length <= 60)) {
-        ctx.fillStyle = 'rgba(230,236,247,0.85)';
+        ctx.fillStyle = 'rgba(74,63,54,0.85)';
         ctx.font = '10px Segoe UI, sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(d.country, x, y - R(d[sizeKey]) - 4);
@@ -439,11 +444,13 @@
     top.forEach((d, i) => {
       const y = M.t + i * bh;
       const bw = (d[key] / maxv) * pw;
-      ctx.fillStyle = COLORS[d.continent] || '#888';
+      ctx.fillStyle = COLORS[d.continent] || '#ccc';
       ctx.globalAlpha = 0.85;
       ctx.fillRect(M.l, y + 2, bw, bh - 5);
       ctx.globalAlpha = 1;
-      ctx.fillStyle = '#e6ecf7'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.strokeStyle = 'rgba(90,70,55,0.2)';
+      ctx.strokeRect(M.l, y + 2, bw, bh - 5);
+      ctx.fillStyle = '#4a3f36'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
       ctx.fillText(d.country, M.l - 8, y + bh/2);
       ctx.textAlign = 'left';
       ctx.fillText(METRIC_FMT[key](d[key]), M.l + bw + 6, y + bh/2);
@@ -474,7 +481,7 @@
       }));
     }
 
-    ctx.strokeStyle = '#22304e'; ctx.fillStyle = '#8b98b8'; ctx.font = '11px Segoe UI, sans-serif';
+    ctx.strokeStyle = '#e3d5c3'; ctx.fillStyle = '#9a8b7a'; ctx.font = '11px Segoe UI, sans-serif';
     const allPts = (selectedCountry ? [{points: series.map(d => ({year:d.year, value:d.lifeExp}))}] : series)
       .flatMap(s => s.points);
     const xs = allPts.map(p => p.year), ys = allPts.map(p => p.value);
@@ -499,7 +506,7 @@
       : series;
 
     seriesArr.forEach(s => {
-      ctx.strokeStyle = s.color; ctx.lineWidth = 2;
+      ctx.strokeStyle = s.color; ctx.lineWidth = 2.5;
       ctx.beginPath();
       s.points.forEach((p, i) => { i === 0 ? ctx.moveTo(X(p.year), Y(p.value)) : ctx.lineTo(X(p.year), Y(p.value)); });
       ctx.stroke();
